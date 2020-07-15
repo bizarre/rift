@@ -11,21 +11,38 @@ use std::io::BufRead;
 use tokio::time::{Duration, Instant};
 use log::{info, warn, debug};
 use pretty_env_logger;
-use crate::command::CommandSender;
+use crate::command::{CommandSender, CommandExecutor, ProxyCommandExecutor};
 use crate::player::Player;
+use crate::engine::{ProxyEngine, IntoProxyEngine};
+use crate::config::{ProxyConfig};
+use std::marker::PhantomData;
 
-pub struct ProxyServer {
+pub struct ProxyServer<F, I, E>
+where
+    F: Fn() -> I + Send + Clone + 'static, 
+    I: IntoProxyEngine<E>,
+    E: ProxyEngine<Config = ProxyConfig, Executor = ProxyCommandExecutor>
+{
     addresses: Vec<net::SocketAddr>,
     players: Vec<Player>,
-    pub created_time: Instant
+    engine: F,
+    pub created_time: Instant,
+    _i: PhantomData<E>
 }
 
-impl ProxyServer {
-    pub fn new() -> Self {
+impl<F, I, E> ProxyServer<F, I, E>
+where
+    F: Fn() -> I + Send + Clone + 'static, 
+    I: IntoProxyEngine<E>,
+    E: ProxyEngine<Config = ProxyConfig, Executor = ProxyCommandExecutor>
+{
+    pub fn new(engine: F) -> Self {
         ProxyServer {
             addresses: Vec::new(),
             players: Vec::<Player>::new(),
-            created_time: Instant::now()
+            created_time: Instant::now(),
+            engine: engine,
+            _i: PhantomData
         }
     }
 
@@ -76,37 +93,61 @@ impl ProxyServer {
         Ok(self)
     }
 
-    pub fn run(self) -> ProxyServerRunner {
+    pub fn run(self) -> ProxyServerRunner<F, I, E> {
         if self.addresses.is_empty() {
             panic!("Must be bound to at least one address");
         }
 
         ProxyServerRunner {
-            server: self
+            server: self,
+            _i: PhantomData
         }
     }
 
 }
 
-pub struct ProxyServerRunner {
-    server: ProxyServer
+pub struct ProxyServerRunner<F, I, E>
+where
+    F: Fn() -> I + Send + Clone + 'static, 
+    I: IntoProxyEngine<E>,
+    E: ProxyEngine<Config = ProxyConfig, Executor = ProxyCommandExecutor>
+{
+    server: ProxyServer<F, I, E>,
+    _i: PhantomData<E>,
 }
 
-impl Future for ProxyServerRunner {
+impl<F, I, E> Future for ProxyServerRunner<F, I, E> 
+where
+    F: Fn() -> I + Send + Clone + 'static, 
+    I: IntoProxyEngine<E>,
+    E: ProxyEngine<Config = ProxyConfig, Executor = ProxyCommandExecutor>
+{
     type Output = io::Result<()>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
+        let this = self.as_ref();
 
-        info!("Successfully started in {:?}.", this.server.created_time.elapsed());
+        info!("Started in {:?}.", &self.server.created_time.elapsed());
+        let engine = &(self.server.engine);
+        let into = crate::engine::into_engine(engine());
+        let commands = into.get_commands();
 
         tokio::spawn(async move {
             let stdin = io::stdin();
             let mut stdin = io::BufReader::new(stdin);
             loop {
-                let mut line = String::new();
-                stdin.read_line(&mut line).unwrap();
-                print!("{}", line);
+                let mut input = String::new();
+                stdin.read_line(&mut input).unwrap();
+                input = input.trim().to_owned();
+                input = input.split_ascii_whitespace().next().unwrap().to_lowercase().to_owned();
+                
+                for command in &commands {
+                    if command.get_label().eq(&input) ||  command.get_aliases().iter().any(|&i| i.eq(&input)) {
+                        command.execute(Box::new(ConsoleCommandSender), Vec::new())
+                    } else {
+                        println!("Unknown command \"{}\".", &input);
+                    }
+                }
             }
         });
 
@@ -114,12 +155,13 @@ impl Future for ProxyServerRunner {
     }
 }
 
-impl CommandSender for ProxyServer {
+struct ConsoleCommandSender;
+impl CommandSender for ConsoleCommandSender {
     fn get_name(&self) -> &str {
         "Console"
     }
 
-    fn send_message<S: Into<String>>(&self, message: S) {
-        println!("{}", message.into())
+    fn send_message(&self, message: String) {
+        info!("{}", message)
     }
 }

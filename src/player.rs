@@ -11,7 +11,7 @@ impl CommandSender for Player {
         &self.name
     }
 
-    fn send_message<S: Into<String>>(&self, message: S) {
+    fn send_message(&self, message: String) {
         // todo: send msg
     }
 }
