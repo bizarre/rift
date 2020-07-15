@@ -4,14 +4,24 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::io::BufReader;
+use tokio::prelude::*;
+use tokio::io::AsyncBufReadExt;
+use std::io::BufRead;
+use tokio::time::{Duration, Instant};
+use log::{info, warn, debug};
+use pretty_env_logger;
+
 pub struct ProxyServer {
-    addresses: Vec<net::SocketAddr>
+    addresses: Vec<net::SocketAddr>,
+    pub created_time: Instant
 }
 
 impl ProxyServer {
     pub fn new() -> Self {
         ProxyServer {
-            addresses: Vec::new()
+            addresses: Vec::new(),
+            created_time: Instant::now()
         }
     }
 
@@ -48,7 +58,7 @@ impl ProxyServer {
         let address = listener.local_addr()?;
         self.addresses.push(address);
 
-        println!("Successfully bound to {}!", &address);
+        debug!("Binded to address {}.", &address);
 
         Ok(self)
     }
@@ -83,6 +93,18 @@ impl Future for ProxyServerRunner {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
+
+        info!("Successfully started in {:?}.", this.server.created_time.elapsed());
+
+        tokio::spawn(async move {
+            let stdin = io::stdin();
+            let mut stdin = io::BufReader::new(stdin);
+            loop {
+                let mut line = String::new();
+                stdin.read_line(&mut line).unwrap();
+                print!("{}", line);
+            }
+        });
 
         Poll::Pending
     }
