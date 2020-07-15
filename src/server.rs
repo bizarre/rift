@@ -11,9 +11,12 @@ use std::io::BufRead;
 use tokio::time::{Duration, Instant};
 use log::{info, warn, debug};
 use pretty_env_logger;
+use crate::command::CommandSender;
+use crate::player::Player;
 
 pub struct ProxyServer {
     addresses: Vec<net::SocketAddr>,
+    players: Vec<Player>,
     pub created_time: Instant
 }
 
@@ -21,6 +24,7 @@ impl ProxyServer {
     pub fn new() -> Self {
         ProxyServer {
             addresses: Vec::new(),
+            players: Vec::<Player>::new(),
             created_time: Instant::now()
         }
     }
@@ -110,3 +114,12 @@ impl Future for ProxyServerRunner {
     }
 }
 
+impl CommandSender for ProxyServer {
+    fn get_name(&self) -> &str {
+        "Console"
+    }
+
+    fn send_message<S: Into<String>>(&self, message: S) {
+        println!("{}", message.into())
+    }
+}

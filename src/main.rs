@@ -1,5 +1,8 @@
 mod packet;
 mod server;
+mod command;
+mod player;
+
 use std::io;
 
 use crate::server::ProxyServer;
