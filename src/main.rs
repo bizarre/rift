@@ -4,6 +4,7 @@ mod command;
 mod player;
 mod engine;
 mod config;
+mod protocol;
 
 use std::io;
 
@@ -12,6 +13,8 @@ use pretty_env_logger;
 use log::{info};
 use crate::engine::{Engine};
 use crate::command::proxy::{ProxyCommand};
+use crate::config::ProxyConfig;
+use std::path::Path;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -21,13 +24,14 @@ async fn main() -> io::Result<()> {
 
    pretty_env_logger::init_timed();
 
-   info!("version - {}", VERSION);
+   info!("You're running rift v{} by Evercave.", VERSION);
 
    ProxyServer::new(move || {
        Engine::new()
-        .command(ProxyCommand::new())
+        .command(ProxyCommand::default())
+        .config(ProxyConfig::load(Path::new("./config.toml")))
    })
-    .bind("localhost:25565")
+    .bind("localhost:25580")
     .await?
     .run()
     .await

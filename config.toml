@@ -1,0 +1,4 @@
+bind = "0.0.0.0:25570"
+ip_forward = true
+online_mode = true
+max_players = 20

@@ -9,8 +9,8 @@ pub struct ProxyCommand {
     backend: Option<Box<dyn Server + Send + Sync>>
 }
 
-impl ProxyCommand {
-    pub fn new() -> Self {
+impl std::default::Default for ProxyCommand {
+    fn default() -> Self {
         ProxyCommand {
             backend: None
         }

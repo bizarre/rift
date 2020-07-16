@@ -40,6 +40,12 @@ impl<E, C> Engine<E, C> where E: CommandExecutor {
 
         self
     }
+
+    pub fn config(mut self, config: C) -> Self {
+        self.config = Some(config);
+
+        self
+    }
 }
 
 impl<E, C> ProxyEngine for Engine<E, C> where E: CommandExecutor {

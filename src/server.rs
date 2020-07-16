@@ -9,7 +9,7 @@ use tokio::prelude::*;
 use tokio::io::AsyncBufReadExt;
 use std::io::BufRead;
 use tokio::time::{Duration, Instant};
-use log::{info, warn, debug, error};
+use log::{info, warn, debug, error, trace};
 use pretty_env_logger;
 use crate::command::{CommandSender, CommandExecutor, ProxyCommandExecutor};
 use crate::player::Player;
@@ -158,11 +158,12 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.as_ref();
 
-        info!("Started in {:?}.", &self.server.created_time.elapsed());
         let engine = &(self.server.engine);
         let into = crate::engine::into_engine(engine());
+        let config = into.get_config().clone();
         let mut commands = into.get_commands();
         let sockets = self.server.addresses.to_vec();
+        
 
         for command in &mut commands {
             command.set_backend(Box::new(self.server.to_dyn())).unwrap();
@@ -171,42 +172,25 @@ where
         for socket in sockets {
             tokio::spawn(async move {
                 let mut listener = TcpListener::bind(socket).await.unwrap();
-
                 loop {
                     if let Ok(client) = listener.accept().await {
                         client.0.set_nodelay(true).unwrap();
-                        let (mut stream, addr) = client;
+                        let (stream, addr) = client;
                         tokio::spawn(async move {
-                            if let Ok(handshake) = crate::packet::handshake::Packet::read(&mut stream).await {
-                                let req: io::Result<crate::packet::handshake::Request> = stream.receive().await;
-                                if req.is_ok() {
-                                    info!("Client ({}) initiated handshake to proxy via {}.", addr, handshake.address);
-                                    let response = handshake::Response {
-                                        players: handshake::Players {
-                                            max: 1,
-                                            online: 100,
-                                            sample: Vec::new()
-                                        },
-                                        description: handshake::Description {
-                                            text: String::from("Rift Baby!")
-                                        },
-                                        version: handshake::Version {
-                                            name: String::from("Rift"),
-                                            protocol: handshake.version
-                                        }
-                                    };
-
-                                    stream.write_packet(response).await.unwrap();
-
-                                    if let Ok(ping) = crate::packet::handshake::Ping::read(&mut stream).await {
-                                        stream.write_packet(ping).await.unwrap();
-                                    } else {
-                                        error!("bad ping packet");
+                            let config = config.clone();
+                            match crate::protocol::slp::attempt_server_list_ping(config, stream, addr).await {
+                                Ok(handshake) => {
+                                    if handshake.next_state == 2 {
+                                        info!("handle login");
                                     }
+                                },
+
+                                Err(error) => {
+                                    error!("{}", error);
                                 }
-                            } else {
-                                error!("Malformed handshake packet from {}!", addr);
-                            }
+                            } 
+
+
                         });
                     }
                 }
@@ -232,6 +216,8 @@ where
                 }
             }
         });
+
+        info!("Started in {:?}.", &self.server.created_time.elapsed());
 
         Poll::Pending
     }
