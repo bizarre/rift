@@ -11,7 +11,7 @@ use crate::server::ProxyServer;
 use pretty_env_logger;
 use log::{info};
 use crate::engine::{Engine};
-use crate::command::version::{VersionCommand};
+use crate::command::proxy::{ProxyCommand};
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -25,7 +25,7 @@ async fn main() -> io::Result<()> {
 
    ProxyServer::new(move || {
        Engine::new()
-        .command(VersionCommand)
+        .command(ProxyCommand)
    })
     .bind("localhost:25565")
     .await?

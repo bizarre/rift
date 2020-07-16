@@ -1,4 +1,4 @@
-pub mod version;
+pub mod proxy;
 
 pub trait CommandSender {
     fn send_message(&self, message: String);

@@ -16,6 +16,7 @@ use crate::player::Player;
 use crate::engine::{ProxyEngine, IntoProxyEngine};
 use crate::config::{ProxyConfig};
 use std::marker::PhantomData;
+use uuid::Uuid;
 
 pub struct ProxyServer<F, I, E>
 where
@@ -131,6 +132,18 @@ where
         let engine = &(self.server.engine);
         let into = crate::engine::into_engine(engine());
         let commands = into.get_commands();
+        let sockets = self.server.addresses.to_vec();
+        
+        for socket in sockets {
+            tokio::spawn(async move {
+                let mut listener = TcpListener::bind(socket).await.unwrap();
+
+                loop {
+                    let client = listener.accept().await.unwrap();
+                    client.0.set_nodelay(true).unwrap();
+                }
+            });
+        }
 
         tokio::spawn(async move {
             let stdin = io::stdin();
@@ -139,11 +152,12 @@ where
                 let mut input = String::new();
                 stdin.read_line(&mut input).unwrap();
                 input = input.trim().to_owned();
-                input = input.split_ascii_whitespace().next().unwrap().to_lowercase().to_owned();
+                let split = input.split_ascii_whitespace();
+                let cmd = split.clone().next().unwrap().to_lowercase().to_owned();
                 
                 for command in &commands {
-                    if command.get_label().eq(&input) ||  command.get_aliases().iter().any(|&i| i.eq(&input)) {
-                        command.execute(Box::new(ConsoleCommandSender), Vec::new())
+                    if command.get_label().eq(&cmd) ||  command.get_aliases().iter().any(|&i| i.eq(&cmd)) {
+                        command.execute(Box::new(ConsoleCommandSender), split.clone().into_iter().skip(1).map(|f| f.to_owned()).collect())
                     } else {
                         println!("Unknown command \"{}\".", &input);
                     }
