@@ -1,8 +1,9 @@
 use crate::command::CommandSender;
 use uuid::Uuid;
 use tokio::net::TcpStream;
+use serde::Serialize;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct Player {
     uuid: Uuid,
     name: String

@@ -27,7 +27,7 @@ impl Command for ProxyCommand {
     }
 
     fn is_console_only(&self) -> bool {
-        true
+        false
     }
 
     fn set_backend(&mut self, server: Box<dyn Server + Send + Sync>) -> io::Result<()> {
@@ -38,22 +38,17 @@ impl Command for ProxyCommand {
     fn execute(&self, sender: Box<dyn CommandSender>, mut arguments: Vec<String>) {
        if arguments.is_empty() {
            sender.send_message(format!("You are on proxy {}.", "Test"));
-           if let Some(backend) = &self.backend {
-               for addr in backend.get_addresses() {
-                   sender.send_message(format!("server addr: {}", addr));
-               }
-           }
            return;
        }
 
        match arguments.pop() {
            Some(arg) => {
                match arg.to_lowercase().as_ref() {
-                   "version" => {
+                   "version" | "ver" => {
                     sender.send_message(format!("Rift version {}", VERSION));
                    },
 
-                   "stop" => {
+                   "stop" | "end" | "kill" | "shutdown" => {
                     sender.send_message(String::from("Stopping the proxy server.."));
                    }
 

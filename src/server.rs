@@ -9,7 +9,7 @@ use tokio::prelude::*;
 use tokio::io::AsyncBufReadExt;
 use std::io::BufRead;
 use tokio::time::{Duration, Instant};
-use log::{info, warn, debug};
+use log::{info, warn, debug, error};
 use pretty_env_logger;
 use crate::command::{CommandSender, CommandExecutor, ProxyCommandExecutor};
 use crate::player::Player;
@@ -17,6 +17,8 @@ use crate::engine::{ProxyEngine, IntoProxyEngine};
 use crate::config::{ProxyConfig};
 use std::marker::PhantomData;
 use uuid::Uuid;
+use crate::packet::{Packet, In, AsyncPacketReadExt, AsyncPacketWriteExt, Out};
+use crate::packet::handshake;
 
 pub trait Server {
     fn get_players(&self) -> Vec<Player>;
@@ -171,8 +173,42 @@ where
                 let mut listener = TcpListener::bind(socket).await.unwrap();
 
                 loop {
-                    let client = listener.accept().await.unwrap();
-                    client.0.set_nodelay(true).unwrap();
+                    if let Ok(client) = listener.accept().await {
+                        client.0.set_nodelay(true).unwrap();
+                        let (mut stream, addr) = client;
+                        tokio::spawn(async move {
+                            if let Ok(handshake) = crate::packet::handshake::Packet::read(&mut stream).await {
+                                let req: io::Result<crate::packet::handshake::Request> = stream.receive().await;
+                                if req.is_ok() {
+                                    info!("Client ({}) initiated handshake to proxy via {}.", addr, handshake.address);
+                                    let response = handshake::Response {
+                                        players: handshake::Players {
+                                            max: 1,
+                                            online: 100,
+                                            sample: Vec::new()
+                                        },
+                                        description: handshake::Description {
+                                            text: String::from("Rift Baby!")
+                                        },
+                                        version: handshake::Version {
+                                            name: String::from("Rift"),
+                                            protocol: handshake.version
+                                        }
+                                    };
+
+                                    stream.write_packet(response).await.unwrap();
+
+                                    if let Ok(ping) = crate::packet::handshake::Ping::read(&mut stream).await {
+                                        stream.write_packet(ping).await.unwrap();
+                                    } else {
+                                        error!("bad ping packet");
+                                    }
+                                }
+                            } else {
+                                error!("Malformed handshake packet from {}!", addr);
+                            }
+                        });
+                    }
                 }
             });
         }
