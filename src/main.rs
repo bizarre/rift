@@ -25,7 +25,7 @@ async fn main() -> io::Result<()> {
 
    ProxyServer::new(move || {
        Engine::new()
-        .command(ProxyCommand)
+        .command(ProxyCommand::new())
    })
     .bind("localhost:25565")
     .await?

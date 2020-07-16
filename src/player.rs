@@ -2,6 +2,7 @@ use crate::command::CommandSender;
 use uuid::Uuid;
 use tokio::net::TcpStream;
 
+#[derive(Clone)]
 pub struct Player {
     uuid: Uuid,
     name: String

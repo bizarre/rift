@@ -18,6 +18,17 @@ use crate::config::{ProxyConfig};
 use std::marker::PhantomData;
 use uuid::Uuid;
 
+pub trait Server {
+    fn get_players(&self) -> Vec<Player>;
+    fn get_addresses(&self) -> Vec<net::SocketAddr>;
+}
+
+#[derive(Clone)]
+struct DynServer {
+    players: Vec<Player>,
+    addresses: Vec<net::SocketAddr>
+}
+
 pub struct ProxyServer<F, I, E>
 where
     F: Fn() -> I + Send + Clone + 'static, 
@@ -44,6 +55,13 @@ where
             created_time: Instant::now(),
             engine: engine,
             _i: PhantomData
+        }
+    }
+
+    fn to_dyn(&self) -> DynServer {
+        DynServer {
+            addresses: self.addresses.to_vec(),
+            players: self.players.to_vec()
         }
     }
 
@@ -107,6 +125,16 @@ where
 
 }
 
+impl Server for DynServer {
+    fn get_players(&self) -> Vec<Player> {
+        self.players.to_vec()
+    }
+
+    fn get_addresses(&self) -> Vec<net::SocketAddr> {
+        self.addresses.to_vec()
+    }
+}
+
 pub struct ProxyServerRunner<F, I, E>
 where
     F: Fn() -> I + Send + Clone + 'static, 
@@ -131,8 +159,12 @@ where
         info!("Started in {:?}.", &self.server.created_time.elapsed());
         let engine = &(self.server.engine);
         let into = crate::engine::into_engine(engine());
-        let commands = into.get_commands();
+        let mut commands = into.get_commands();
         let sockets = self.server.addresses.to_vec();
+
+        for command in &mut commands {
+            command.set_backend(Box::new(self.server.to_dyn())).unwrap();
+        }
         
         for socket in sockets {
             tokio::spawn(async move {
