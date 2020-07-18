@@ -28,7 +28,7 @@ cargo run
 
 The default configuration binds to port `25570`, if you add `localhost:25570` to your Minecraft server list you should see **rift** running!
 
-![img](https://i.imgur.com/ljcQGSF.png)
+![img](https://i.imgur.com/xvfWy2Q.png)
 
 That's about it. You can proceed to fine-tune the [config.toml](config.toml) to your liking.
 
