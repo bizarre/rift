@@ -26,12 +26,14 @@ async fn main() -> io::Result<()> {
 
    info!("You're running rift v{}.", VERSION);
 
+   let config = ProxyConfig::load(Path::new("./config.toml"));
+
    ProxyServer::new(move || {
        Engine::new()
         .command(ProxyCommand::default())
-        .config(ProxyConfig::load(Path::new("./config.toml")))
+        .config(config)
    })
-    .bind("localhost:25580")
+    .bind(&config.bind)
     .await?
     .run()
     .await

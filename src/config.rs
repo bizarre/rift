@@ -6,7 +6,7 @@ use log::{info, trace, warn};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct ProxyConfig {
-    bind: &'static str,
+    pub bind: &'static str,
     pub ip_forward: bool,
     pub online_mode: bool,
     pub max_players: i32
