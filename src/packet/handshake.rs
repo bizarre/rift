@@ -23,7 +23,9 @@ pub struct Ping {
 pub struct Response {
     pub version: Version,
     pub players: Players,
-    pub description: Description
+    pub description: Description,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub favicon: Option<String>
 }
 
 #[derive(Serialize)]

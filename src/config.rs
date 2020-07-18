@@ -9,7 +9,9 @@ pub struct ProxyConfig {
     pub bind: &'static str,
     pub ip_forward: bool,
     pub online_mode: bool,
-    pub max_players: i32
+    pub max_players: i32,
+    pub motd: &'static str,
+    pub favicon: Option<&'static str>
 }
 
 impl ProxyConfig {
@@ -30,6 +32,10 @@ impl ProxyConfig {
             config
         }
     }
+
+    pub(crate) fn set_favicon(&mut self, b64: String) {
+        self.favicon = Some(Box::leak(b64.into_boxed_str()));
+    }
 }
 
 impl Default for ProxyConfig {
@@ -38,7 +44,9 @@ impl Default for ProxyConfig {
             bind: "0.0.0.0:25570",
             ip_forward: true,
             online_mode: true,
-            max_players: 20
+            max_players: 20,
+            motd: "&3Enter the rift.",
+            favicon: None
         }
     }
 }

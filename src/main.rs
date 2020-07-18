@@ -5,6 +5,7 @@ mod player;
 mod engine;
 mod config;
 mod protocol;
+mod util;
 
 use std::io;
 
@@ -26,7 +27,12 @@ async fn main() -> io::Result<()> {
 
    info!("You're running rift v{}.", VERSION);
 
-   let config = ProxyConfig::load(Path::new("./config.toml"));
+   let mut config = ProxyConfig::load(Path::new("./config.toml"));
+
+   let path = Path::new("./favicon.png");
+   if path.exists() {
+        config.set_favicon(image_base64::to_base64("./favicon.png"));
+   }
 
    ProxyServer::new(move || {
        Engine::new()

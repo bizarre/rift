@@ -12,7 +12,6 @@ use crate::player::Player;
 use crate::engine::{ProxyEngine, IntoProxyEngine};
 use crate::config::{ProxyConfig};
 use std::marker::PhantomData;
-use uuid::Uuid;
 
 pub trait Server {
     fn get_players(&self) -> Vec<Player>;
