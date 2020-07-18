@@ -7,9 +7,9 @@ use log::{info, trace, warn};
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct ProxyConfig {
     bind: &'static str,
-    ip_forward: bool,
-    online_mode: bool,
-    max_players: i32
+    pub ip_forward: bool,
+    pub online_mode: bool,
+    pub max_players: i32
 }
 
 impl ProxyConfig {

@@ -1,6 +1,5 @@
 pub mod handshake;
 
-use tokio::net::TcpStream;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use std::io::Result;
 use async_trait::async_trait;

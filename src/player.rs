@@ -1,16 +1,20 @@
 use crate::command::CommandSender;
 use uuid::Uuid;
-use tokio::net::TcpStream;
 use serde::Serialize;
 
 #[derive(Clone, Serialize)]
 pub struct Player {
-    uuid: Uuid,
+    id: Uuid,
     name: String
 }
 
 impl Player {
-
+    pub fn new<S: Into<String>>(id: Uuid, name: S) -> Self {
+        Player {
+            id: id,
+            name: name.into()
+        }
+    }
 }
 
 impl CommandSender for Player {

@@ -1,24 +1,18 @@
 use std::{io, net};
 use std::fmt::Display;
-use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::net::{TcpListener, ToSocketAddrs};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::io::BufReader;
-use tokio::prelude::*;
-use tokio::io::AsyncBufReadExt;
 use std::io::BufRead;
-use tokio::time::{Duration, Instant};
-use log::{info, warn, debug, error, trace};
-use pretty_env_logger;
-use crate::command::{CommandSender, CommandExecutor, ProxyCommandExecutor};
+use tokio::time::{Instant};
+use log::{info, debug, error};
+use crate::command::{CommandSender, ProxyCommandExecutor};
 use crate::player::Player;
 use crate::engine::{ProxyEngine, IntoProxyEngine};
 use crate::config::{ProxyConfig};
 use std::marker::PhantomData;
 use uuid::Uuid;
-use crate::packet::{Packet, In, AsyncPacketReadExt, AsyncPacketWriteExt, Out};
-use crate::packet::handshake;
 
 pub trait Server {
     fn get_players(&self) -> Vec<Player>;
@@ -143,42 +137,45 @@ where
     I: IntoProxyEngine<E>,
     E: ProxyEngine<Config = ProxyConfig, Executor = ProxyCommandExecutor>
 {
-    server: ProxyServer<F, I, E>,
+    pub server: ProxyServer<F, I, E>,
     _i: PhantomData<E>,
 }
 
 impl<F, I, E> Future for ProxyServerRunner<F, I, E> 
 where
-    F: Fn() -> I + Send + Clone + 'static, 
+    F: Fn() -> I + Send + Clone + 'static + Unpin, 
     I: IntoProxyEngine<E>,
-    E: ProxyEngine<Config = ProxyConfig, Executor = ProxyCommandExecutor>
+    E: ProxyEngine<Config = ProxyConfig, Executor = ProxyCommandExecutor> + 'static + Unpin
 {
     type Output = io::Result<()>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.as_ref();
+        let this = self.get_mut();
 
-        let engine = &(self.server.engine);
+        let engine = &(this.server.engine);
         let into = crate::engine::into_engine(engine());
         let config = into.get_config().clone();
         let mut commands = into.get_commands();
-        let sockets = self.server.addresses.to_vec();
-        
+        let sockets = this.server.addresses.to_vec();
 
         for command in &mut commands {
-            command.set_backend(Box::new(self.server.to_dyn())).unwrap();
+            command.set_backend(Box::new(this.server.to_dyn())).unwrap();
         }
         
         for socket in sockets {
+            let server = this.server.to_dyn();
             tokio::spawn(async move {
                 let mut listener = TcpListener::bind(socket).await.unwrap();
+                let cloned = server.clone();
                 loop {
+                    let cloned = cloned.clone();
                     if let Ok(client) = listener.accept().await {
                         client.0.set_nodelay(true).unwrap();
                         let (stream, addr) = client;
                         tokio::spawn(async move {
                             let config = config.clone();
-                            match crate::protocol::slp::attempt_server_list_ping(config, stream, addr).await {
+
+                            match crate::protocol::slp::attempt_server_list_ping(config, cloned, stream, addr).await {
                                 Ok(handshake) => {
                                     if handshake.next_state == 2 {
                                         info!("handle login");
@@ -217,7 +214,7 @@ where
             }
         });
 
-        info!("Started in {:?}.", &self.server.created_time.elapsed());
+        info!("Started in {:?}.", &this.server.created_time.elapsed());
 
         Poll::Pending
     }

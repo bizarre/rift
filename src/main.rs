@@ -24,7 +24,7 @@ async fn main() -> io::Result<()> {
 
    pretty_env_logger::init_timed();
 
-   info!("You're running rift v{} by Evercave.", VERSION);
+   info!("You're running rift v{}.", VERSION);
 
    ProxyServer::new(move || {
        Engine::new()

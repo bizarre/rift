@@ -1,27 +1,11 @@
 use std::{io, net};
-use std::fmt::Display;
-use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::io::BufReader;
-use tokio::prelude::*;
-use tokio::io::AsyncBufReadExt;
-use std::io::BufRead;
-use tokio::time::{Duration, Instant};
-use log::{info, warn, debug, error, trace};
-use pretty_env_logger;
-use crate::command::{CommandSender, CommandExecutor, ProxyCommandExecutor};
-use crate::player::Player;
-use crate::engine::{ProxyEngine, IntoProxyEngine};
-use crate::config::{ProxyConfig};
-use std::marker::PhantomData;
-use uuid::Uuid;
-use crate::packet::{Packet, In, AsyncPacketReadExt, AsyncPacketWriteExt, Out};
+use tokio::net::{TcpStream};
+use log::{info, error};
+use crate::packet::{In, AsyncPacketReadExt, AsyncPacketWriteExt};
 use crate::packet::handshake;
 use std::io::{Error, ErrorKind};
 
-pub async fn attempt_server_list_ping(config: crate::config::ProxyConfig, mut stream: TcpStream, addr: net::SocketAddr) -> io::Result<handshake::Packet> {
+pub async fn attempt_server_list_ping<T: crate::server::Server>(config: crate::config::ProxyConfig, server: T, mut stream: TcpStream, addr: net::SocketAddr) -> io::Result<handshake::Packet> {
     if let Ok(handshake) = crate::packet::handshake::Packet::read(&mut stream).await {
         if handshake.next_state == 2 {
             return Ok(handshake)
@@ -32,9 +16,9 @@ pub async fn attempt_server_list_ping(config: crate::config::ProxyConfig, mut st
             info!("Client ({}) initiated handshake to proxy via {}.", addr, handshake.address);
             let response = handshake::Response {
                 players: handshake::Players {
-                    max: 1,
-                    online: 100,
-                    sample: Vec::new()
+                    max: config.max_players,
+                    online: server.get_players().len() as i32,
+                    sample: server.get_players()
                 },
                 description: handshake::Description {
                     text: String::from("Rift Baby!")
