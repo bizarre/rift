@@ -8,6 +8,7 @@ This is not even close to being production ready, so don't use it in production.
 ## Project Goals
 - Support many protocol versions
 - Support distributed proxy setups out the box
+- Built-in web panel for analytics and configuration
 - *Be very fast.. sonek fast ..*
 
 ## Getting Started
