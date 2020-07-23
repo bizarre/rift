@@ -1,18 +1,21 @@
 use crate::command::CommandSender;
 use uuid::Uuid;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Debug, Deserialize)]
 pub struct Player {
     id: Uuid,
-    name: String
+    name: String,
+    properties: Vec<HashMap<String, String>>
 }
 
 impl Player {
     pub fn new<S: Into<String>>(id: Uuid, name: S) -> Self {
         Player {
             id: id,
-            name: name.into()
+            name: name.into(),
+            properties: Vec::new()
         }
     }
 }

@@ -6,22 +6,27 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::io::BufRead;
 use tokio::time::{Instant};
-use log::{info, debug, error};
+use log::{info, debug, error, trace};
 use crate::command::{CommandSender, ProxyCommandExecutor};
 use crate::player::Player;
 use crate::engine::{ProxyEngine, IntoProxyEngine};
 use crate::config::{ProxyConfig};
 use std::marker::PhantomData;
+use crate::packet::{In, Out, AsyncPacketReadExt, AsyncPacketWriteExt};
+use openssl::rsa::{Rsa, Padding};
+use rand::Rng;
 
 pub trait Server {
     fn get_players(&self) -> Vec<Player>;
     fn get_addresses(&self) -> Vec<net::SocketAddr>;
+    fn get_rsa(&self) -> Rsa<openssl::pkey::Private>;
 }
 
 #[derive(Clone)]
 struct DynServer {
     players: Vec<Player>,
-    addresses: Vec<net::SocketAddr>
+    addresses: Vec<net::SocketAddr>,
+    rsa: Rsa<openssl::pkey::Private>
 }
 
 pub struct ProxyServer<F, I, E>
@@ -30,6 +35,7 @@ where
     I: IntoProxyEngine<E>,
     E: ProxyEngine<Config = ProxyConfig, Executor = ProxyCommandExecutor>
 {
+    rsa: Rsa<openssl::pkey::Private>,
     addresses: Vec<net::SocketAddr>,
     players: Vec<Player>,
     engine: F,
@@ -45,6 +51,7 @@ where
 {
     pub fn new(engine: F) -> Self {
         ProxyServer {
+            rsa: Rsa::generate(1028).unwrap(),
             addresses: Vec::new(),
             players: Vec::<Player>::new(),
             created_time: Instant::now(),
@@ -56,7 +63,8 @@ where
     fn to_dyn(&self) -> DynServer {
         DynServer {
             addresses: self.addresses.to_vec(),
-            players: self.players.to_vec()
+            players: self.players.to_vec(),
+            rsa: self.rsa.clone()
         }
     }
 
@@ -128,6 +136,10 @@ impl Server for DynServer {
     fn get_addresses(&self) -> Vec<net::SocketAddr> {
         self.addresses.to_vec()
     }
+
+    fn get_rsa(&self) -> Rsa<openssl::pkey::Private> {
+        self.rsa.clone()
+    }
 }
 
 pub struct ProxyServerRunner<F, I, E>
@@ -170,14 +182,43 @@ where
                     let cloned = cloned.clone();
                     if let Ok(client) = listener.accept().await {
                         client.0.set_nodelay(true).unwrap();
-                        let (stream, addr) = client;
+                        let (mut stream, addr) = client;
                         tokio::spawn(async move {
                             let config = config.clone();
 
-                            match crate::protocol::slp::attempt_server_list_ping(config, cloned, stream, addr).await {
+                            match crate::protocol::slp::attempt_server_list_ping(config, &cloned, &mut stream, addr).await {
                                 Ok(handshake) => {
                                     if handshake.next_state == 2 {
-                                        info!("handle login");
+                                        let req: io::Result<crate::packet::login::Start> = stream.receive().await;
+                                        if let Ok(packet) = req {
+                                            debug!("User \"{}\" initiating login process.", packet.name);
+                                            let token = format!("{}", rand::thread_rng().gen::<i64>());
+
+                                            let encryption_request = crate::packet::login::EncryptionRequest {
+                                                id: String::from(""),
+                                                public_key: cloned.rsa.public_key_to_der().unwrap(),
+                                                token: token.as_bytes().to_vec()
+                                            };
+
+                                            trace!("Sent encryption request to {} ({})", packet.name, addr);
+                                            stream.write_packet(encryption_request).await.unwrap();
+
+                                            let encryption_response_req: io::Result<crate::packet::login::EncryptionResponse> = stream.receive().await;
+                                            if let Ok(encryption_response) = encryption_response_req {
+                                                trace!("Received encryption response from {} ({})", packet.name, addr);
+
+                                                let resp = reqwest::get(&format!("https://sessionserver.mojang.com/session/minecraft/hasJoined?username={}&serverId={}",
+                                                packet.name,
+                                                crate::util::hash::calc_hash("", &encryption_response.secret, &cloned.rsa.public_key_to_der().unwrap())))
+                                                    .await.unwrap()
+                                                    .text()
+                                                    .await.unwrap();
+
+                                                println!("mojang resp: {}", resp);
+                                            }
+                                        } else {
+                                            error!("Invalid login process initiation.");
+                                        }
                                     }
                                 },
 

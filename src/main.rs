@@ -39,7 +39,7 @@ async fn main() -> io::Result<()> {
         .command(ProxyCommand::default())
         .config(config)
    })
-    .bind(&config.bind)
+    .bind(config.bind)
     .await?
     .run()
     .await

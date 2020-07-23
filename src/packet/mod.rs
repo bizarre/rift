@@ -1,8 +1,11 @@
 pub mod handshake;
+pub mod login;
+use log::{trace};
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use std::io::Result;
 use async_trait::async_trait;
+use std::io::{Error, ErrorKind};
 
 pub trait Packet {
  fn get_id(&self) -> i32;
@@ -168,7 +171,8 @@ impl<R: AsyncRead + Unpin + Send + Sync> AsyncPacketReadExt for R {
             tokio::time::delay_for(tokio::time::Duration::from_secs(1)).await;
 
             if time > 3 {
-                panic!("Request timed out.");
+                trace!("Packet read timed out.");
+                return Err(Error::new(ErrorKind::Other, "Packet read timed out."));
             }
         }
     }

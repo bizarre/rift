@@ -6,8 +6,8 @@ use crate::packet::handshake;
 use std::io::{Error, ErrorKind};
 use crate::util::color::Color;
 
-pub async fn attempt_server_list_ping<T: crate::server::Server>(config: crate::config::ProxyConfig, server: T, mut stream: TcpStream, addr: net::SocketAddr) -> io::Result<handshake::Packet> {
-    if let Ok(handshake) = crate::packet::handshake::Packet::read(&mut stream).await {
+pub async fn attempt_server_list_ping<T: crate::server::Server>(config: crate::config::ProxyConfig, server: &T, stream: &mut TcpStream, addr: net::SocketAddr) -> io::Result<handshake::Packet> {
+    if let Ok(handshake) = crate::packet::handshake::Packet::read(stream).await {
         if handshake.next_state == 2 {
             return Ok(handshake)
         }
@@ -37,7 +37,7 @@ pub async fn attempt_server_list_ping<T: crate::server::Server>(config: crate::c
 
             stream.write_packet(response).await.unwrap();
 
-            if let Ok(ping) = crate::packet::handshake::Ping::read(&mut stream).await {
+            if let Ok(ping) = crate::packet::handshake::Ping::read(stream).await {
                 stream.write_packet(ping).await.unwrap();
                 Ok(handshake)
             } else {
