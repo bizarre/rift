@@ -28,6 +28,7 @@ async fn main() -> io::Result<()> {
    info!("You're running rift v{}.", VERSION);
 
    let mut config = ProxyConfig::load(Path::new("./config.toml"));
+   let bind = config.bind;
 
    let path = Path::new("./favicon.png");
    if path.exists() {
@@ -35,11 +36,13 @@ async fn main() -> io::Result<()> {
    }
 
    ProxyServer::new(move || {
-       Engine::new()
-        .command(ProxyCommand::default())
-        .config(config)
+        let cloned = config.clone();
+        
+        Engine::new()
+          .command(ProxyCommand::default())
+          .config(cloned)
    })
-    .bind(config.bind)
+    .bind(bind)
     .await?
     .run()
     .await

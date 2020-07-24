@@ -175,21 +175,24 @@ where
         
         for socket in sockets {
             let server = this.server.to_dyn();
+            let config = config.clone();
             tokio::spawn(async move {
                 let mut listener = TcpListener::bind(socket).await.unwrap();
                 let cloned = server.clone();
+                let config = config.clone();
                 loop {
                     let cloned = cloned.clone();
+                    let config = config.clone();
                     if let Ok(client) = listener.accept().await {
                         client.0.set_nodelay(true).unwrap();
                         let (mut stream, addr) = client;
                         tokio::spawn(async move {
                             let config = config.clone();
 
-                            match crate::protocol::slp::attempt_server_list_ping(config, &cloned, &mut stream, addr).await {
+                            match crate::protocol::slp::attempt_server_list_ping(config.clone(), &cloned, &mut stream, addr).await {
                                 Ok(handshake) => {
                                     if handshake.next_state == 2 {
-                                        match crate::protocol::login::attempt_login(config, &cloned, &mut stream, addr).await {
+                                        match crate::protocol::login::attempt_login(config.clone(), &cloned, &mut stream, addr).await {
                                             Ok((player, secret)) => {
                                                 println!("player logging in is {:?}", player);
                                             },

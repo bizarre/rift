@@ -3,3 +3,7 @@ ip_forward = true
 online_mode = true
 max_players = 20
 motd = "&3Enter the rift."
+
+[[servers]]
+id = "lobby"
+address = "localhost:25565"
