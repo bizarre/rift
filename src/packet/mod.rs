@@ -6,6 +6,12 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use std::io::Result;
 use async_trait::async_trait;
 use std::io::{Error, ErrorKind};
+use openssl::rsa::{Rsa, Padding};
+use aes::Aes128;
+use cfb8::Cfb8;
+use cfb8::stream_cipher::{NewStreamCipher, StreamCipher};
+
+type AesCfb8 = Cfb8<Aes128>;
 
 pub trait Packet {
  fn get_id(&self) -> i32;
@@ -27,6 +33,7 @@ pub trait AsyncPacketWriteExt : AsyncWriteExt {
     async fn write_string(&mut self, value: String) -> Result<()>;
     async fn write_ushort(&mut self, value: u16) -> Result<()>;
     async fn write_packet<T: Packet + Out + Send + Sync>(&mut self, packet: T) -> Result<()>;
+    async fn write_packet_encrypted<T: Packet + Out + Send + Sync>(&mut self, packet: T, secret: &[u8]) -> Result<()>;
 }
 
 #[async_trait]
@@ -36,6 +43,7 @@ pub trait AsyncPacketReadExt : AsyncReadExt {
     async fn read_long(&mut self) -> Result<i64>;
     async fn read_ushort(&mut self) -> Result<u16>;
     async fn receive<T: Packet + In + Send + Sync>(&mut self) -> Result<T>;
+    async fn receive_encrypted<T: Packet + In + Send + Sync>(&mut self, secret: &[u8]) -> Result<T>;
 }
 
 #[async_trait]
@@ -94,6 +102,23 @@ impl<W: AsyncWrite + Unpin + Send + Sync> AsyncPacketWriteExt for W {
 
         payload.write_varint(buffer.len() as i32).await?;
         payload.write_all(&buffer).await?;
+
+        self.write_all(&payload).await?;
+
+        Ok(())
+    }
+
+    async fn write_packet_encrypted<T: Packet + Out + Send + Sync>(&mut self, packet: T, secret: &[u8]) -> Result<()> {
+        let mut buffer = Vec::new();
+        let mut payload = Vec::new();
+
+        buffer.write_varint(packet.get_id()).await?;
+        packet.write(&mut buffer).await?;
+
+        payload.write_varint(buffer.len() as i32).await?;
+        payload.write_all(&buffer).await?;
+
+        AesCfb8::new_var(secret, secret).unwrap().encrypt(&mut payload);
 
         self.write_all(&payload).await?;
 
@@ -163,6 +188,31 @@ impl<R: AsyncRead + Unpin + Send + Sync> AsyncPacketReadExt for R {
 
         loop {
             let packet = T::read(self).await;
+            if packet.is_ok() {
+                return Ok(packet.unwrap());
+            }
+
+            time += 1;
+            tokio::time::delay_for(tokio::time::Duration::from_secs(1)).await;
+
+            if time > 3 {
+                trace!("Packet read timed out.");
+                return Err(Error::new(ErrorKind::Other, "Packet read timed out."));
+            }
+        }
+    }
+
+    async fn receive_encrypted<T: Packet + In + Send + Sync>(&mut self, secret: &[u8]) -> Result<T> {
+        let mut time: i32 = 0;
+
+        loop {
+            let mut all = Vec::new();
+            let bytes = self.read_to_end(&mut all).await?;
+
+            AesCfb8::new_var(secret, secret).unwrap().decrypt(&mut all);
+            let mut reader = std::io::Cursor::new(all);
+            let packet = T::read(&mut reader).await;
+            
             if packet.is_ok() {
                 return Ok(packet.unwrap());
             }

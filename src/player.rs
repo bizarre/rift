@@ -5,9 +5,9 @@ use std::collections::HashMap;
 
 #[derive(Clone, Serialize, Debug, Deserialize)]
 pub struct Player {
-    id: Uuid,
-    name: String,
-    properties: Vec<HashMap<String, String>>
+    pub id: Uuid,
+    pub name: String,
+    pub properties: Vec<HashMap<String, String>>
 }
 
 impl Player {

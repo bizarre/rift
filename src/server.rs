@@ -193,11 +193,12 @@ where
                                         if let Ok(packet) = req {
                                             debug!("User \"{}\" initiating login process.", packet.name);
                                             let token = format!("{}", rand::thread_rng().gen::<i64>());
+                                            let token_bytes = token.as_bytes();
 
                                             let encryption_request = crate::packet::login::EncryptionRequest {
                                                 id: String::from(""),
                                                 public_key: cloned.rsa.public_key_to_der().unwrap(),
-                                                token: token.as_bytes().to_vec()
+                                                token: token_bytes.to_vec()
                                             };
 
                                             trace!("Sent encryption request to {} ({})", packet.name, addr);
@@ -207,14 +208,26 @@ where
                                             if let Ok(encryption_response) = encryption_response_req {
                                                 trace!("Received encryption response from {} ({})", packet.name, addr);
 
+                                                let decrypted_token = encryption_response.decrypt_token(&cloned.rsa, token_bytes.len());
+                                                if !std::str::from_utf8(&decrypted_token).unwrap().eq(&token) {
+                                                    error!("Invalid login token received.");
+                                                    return
+                                                }
+
+                                                let secret = encryption_response.decrypt_secret(&cloned.rsa);
+
                                                 let resp = reqwest::get(&format!("https://sessionserver.mojang.com/session/minecraft/hasJoined?username={}&serverId={}",
                                                 packet.name,
-                                                crate::util::hash::calc_hash("", &encryption_response.secret, &cloned.rsa.public_key_to_der().unwrap())))
+                                                crate::util::hash::server_hash("", &secret, &cloned.rsa.public_key_to_der().unwrap())))
                                                     .await.unwrap()
-                                                    .text()
+                                                    .json::<Player>()
                                                     .await.unwrap();
 
-                                                println!("mojang resp: {}", resp);
+                                                trace!("Authenticated {} ({})", packet.name, addr);
+
+                                                stream.write_packet_encrypted(crate::packet::login::Success {
+                                                    player: resp
+                                                }, &secret);
                                             }
                                         } else {
                                             error!("Invalid login process initiation.");
