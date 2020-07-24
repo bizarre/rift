@@ -189,49 +189,15 @@ where
                             match crate::protocol::slp::attempt_server_list_ping(config, &cloned, &mut stream, addr).await {
                                 Ok(handshake) => {
                                     if handshake.next_state == 2 {
-                                        let req: io::Result<crate::packet::login::Start> = stream.receive().await;
-                                        if let Ok(packet) = req {
-                                            debug!("User \"{}\" initiating login process.", packet.name);
-                                            let token = format!("{}", rand::thread_rng().gen::<i64>());
-                                            let token_bytes = token.as_bytes();
-
-                                            let encryption_request = crate::packet::login::EncryptionRequest {
-                                                id: String::from(""),
-                                                public_key: cloned.rsa.public_key_to_der().unwrap(),
-                                                token: token_bytes.to_vec()
-                                            };
-
-                                            trace!("Sent encryption request to {} ({})", packet.name, addr);
-                                            stream.write_packet(encryption_request).await.unwrap();
-
-                                            let encryption_response_req: io::Result<crate::packet::login::EncryptionResponse> = stream.receive().await;
-                                            if let Ok(encryption_response) = encryption_response_req {
-                                                trace!("Received encryption response from {} ({})", packet.name, addr);
-
-                                                let decrypted_token = encryption_response.decrypt_token(&cloned.rsa, token_bytes.len());
-                                                if !std::str::from_utf8(&decrypted_token).unwrap().eq(&token) {
-                                                    error!("Invalid login token received.");
-                                                    return
-                                                }
-
-                                                let secret = encryption_response.decrypt_secret(&cloned.rsa);
-
-                                                let resp = reqwest::get(&format!("https://sessionserver.mojang.com/session/minecraft/hasJoined?username={}&serverId={}",
-                                                packet.name,
-                                                crate::util::hash::server_hash("", &secret, &cloned.rsa.public_key_to_der().unwrap())))
-                                                    .await.unwrap()
-                                                    .json::<Player>()
-                                                    .await.unwrap();
-
-                                                trace!("Authenticated {} ({})", packet.name, addr);
-
-                                                stream.write_packet_encrypted(crate::packet::login::Success {
-                                                    player: resp
-                                                }, &secret);
+                                        match crate::protocol::login::attempt_login(config, &cloned, &mut stream, addr).await {
+                                            Ok((player, secret)) => {
+                                                println!("player logging in is {:?}", player);
+                                            },
+            
+                                            Err(error) => {
+                                                error!("{}", error);
                                             }
-                                        } else {
-                                            error!("Invalid login process initiation.");
-                                        }
+                                        } 
                                     }
                                 },
 
