@@ -44,10 +44,6 @@ pub async fn attempt_login<T: crate::server::Server>(config: crate::config::Prox
 
             trace!("Authenticated {} ({})", packet.name, addr);
 
-            stream.write_packet_encrypted(crate::packet::login::Success {
-                player: resp.clone()
-            }, &secret).await.unwrap();
-
             return Ok((resp, secret))
         } else {
             return Err(Error::new(ErrorKind::Other, "Invalid encryption response."));

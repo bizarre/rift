@@ -15,7 +15,7 @@ pub struct ServerConfig {
 }
 
 impl ServerConfig {
-    fn get_address(&self) -> std::net::SocketAddr {
+    pub fn get_address(&self) -> std::net::SocketAddr {
         self.address.to_owned().to_socket_addrs().unwrap().next().unwrap()
     }
 }

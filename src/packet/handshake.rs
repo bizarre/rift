@@ -5,7 +5,7 @@ use std::io::{Error, ErrorKind};
 use crate::player::Player;
 use serde::Serialize;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Packet {
     pub version: i32,
     pub address: String,
@@ -74,6 +74,17 @@ impl In for Packet {
             port: port,
             next_state: next_state
         })
+    }
+}
+
+#[async_trait]
+impl Out for Packet {
+    async fn write<W: AsyncPacketWriteExt + std::marker::Unpin + Send + Sync>(self, buffer: &mut W) -> std::io::Result<()> {
+        buffer.write_varint(self.version).await?;
+        buffer.write_string(self.address).await?;
+        buffer.write_u16(self.port).await?;
+        buffer.write_varint(self.next_state).await?;
+        Ok(())
     }
 }
 

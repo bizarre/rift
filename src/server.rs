@@ -1,6 +1,6 @@
 use std::{io, net};
 use std::fmt::Display;
-use tokio::net::{TcpListener, ToSocketAddrs};
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -197,6 +197,21 @@ where
                                             match crate::protocol::login::attempt_login(config.clone(), &cloned, &mut stream, addr).await {
                                                 Ok((player, secret)) => {
                                                    trace!("Sending {} to {}", player.name, default_server.id);
+
+                                                   let target = default_server.get_address();
+                                                   if let Ok(mut server) = TcpStream::connect(target).await {
+                                                        server.set_nodelay(true);
+                                                        server.write_packet(handshake.clone()).await.unwrap();
+                                                   } else {
+                                                       trace!("Failed to connect {} to {}!", player.name, default_server.id);
+                                                       stream.write_packet_encrypted(crate::packet::login::Disconnect {
+                                                            chat: Chat::new(format!("&cFailed to connect to {}!", default_server.id))
+                                                       }, &secret).await.unwrap();
+                                                   }
+
+                                                   /*stream.write_packet_encrypted(crate::packet::login::Success {
+                                                    player: resp.clone()
+                                                    }, &secret).await.unwrap();*/
                                                 },
                 
                                                 Err(error) => {
