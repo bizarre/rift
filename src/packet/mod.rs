@@ -10,7 +10,7 @@ use openssl::rsa::{Rsa, Padding};
 use aes::Aes128;
 use cfb8::Cfb8;
 use cfb8::stream_cipher::{NewStreamCipher, StreamCipher};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use crate::util::color::Color;
 
 type AesCfb8 = Cfb8<Aes128>;
@@ -186,22 +186,7 @@ impl<R: AsyncRead + Unpin + Send + Sync> AsyncPacketReadExt for R {
     }
 
     async fn receive<T: Packet + In + Send + Sync>(&mut self) -> Result<T> {
-        let mut time: i32 = 0;
-
-        loop {
-            let packet = T::read(self).await;
-            if packet.is_ok() {
-                return Ok(packet.unwrap());
-            }
-
-            time += 1;
-            tokio::time::delay_for(tokio::time::Duration::from_secs(1)).await;
-
-            if time > 3 {
-                trace!("Packet read timed out.");
-                return Err(Error::new(ErrorKind::Other, "Packet read timed out."));
-            }
-        }
+        return T::read(self).await;    
     }
 
     async fn receive_encrypted<T: Packet + In + Send + Sync>(&mut self, secret: &[u8]) -> Result<T> {
@@ -230,15 +215,19 @@ impl<R: AsyncRead + Unpin + Send + Sync> AsyncPacketReadExt for R {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Chat {
-    pub text: String
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub translate: Option<String>
 }
 
 impl Chat {
     pub fn new<S: Into<String>>(text: S) -> Self {
         Chat {
-            text: text.into().colored()
+            text: Some(text.into().colored()),
+            translate: None
         }
     }
 }

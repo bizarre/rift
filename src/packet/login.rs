@@ -35,6 +35,15 @@ impl In for Start {
     }
 }
 
+#[async_trait]
+impl Out for Start {
+    async fn write<W: AsyncPacketWriteExt + std::marker::Unpin + Send + Sync>(self, buffer: &mut W) -> std::io::Result<()> {
+        buffer.write_string(self.name).await?;
+        Ok(())
+    }
+}
+
+
 #[derive(Debug)]
 pub struct EncryptionRequest {
     pub id: String,
@@ -117,7 +126,8 @@ impl In for EncryptionResponse {
 
 #[derive(Debug)]
 pub struct Success {
-    pub player: Player
+    pub uuid: String,
+    pub name: String
 }
 
 
@@ -131,9 +141,28 @@ impl Packet for Success {
 #[async_trait]
 impl Out for Success {
     async fn write<W: AsyncPacketWriteExt + std::marker::Unpin + Send + Sync>(self, buffer: &mut W) -> std::io::Result<()> {
-        buffer.write_string(self.player.id.to_string()).await?;
-        buffer.write_string(self.player.name).await?;
+        buffer.write_string(self.uuid).await?;
+        buffer.write_string(self.name).await?;
         Ok(())
+    }
+}
+
+#[async_trait]
+impl In for Success {
+    async fn read<R: AsyncPacketReadExt + std::marker::Unpin + Send + Sync>(buffer: &mut R) -> std::io::Result<Self> where Self: Sized {
+        let size = buffer.read_varint().await?; //todo: maybe offload this kind of logic to calling function
+        let id = buffer.read_varint().await?;
+
+        if id != 0x02 {
+            return Err(Error::new(ErrorKind::Other, format!("{}", id)));
+        }
+
+        // im assuming offline mode servers dont send back a uuid or name in this packet ?
+
+        Ok(Success {
+            uuid: String::from("N/A"),
+            name: String::from("N/A")
+        })
     }
 }
 

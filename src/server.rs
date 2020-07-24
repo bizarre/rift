@@ -16,6 +16,7 @@ use crate::packet::{In, Out, AsyncPacketReadExt, AsyncPacketWriteExt};
 use openssl::rsa::{Rsa, Padding};
 use rand::Rng;
 use crate::packet::Chat;
+use std::error::Error;
 
 pub trait Server {
     fn get_players(&self) -> Vec<Player>;
@@ -196,12 +197,47 @@ where
                                         if let Ok(default_server) = config.get_default_server() {
                                             match crate::protocol::login::attempt_login(config.clone(), &cloned, &mut stream, addr).await {
                                                 Ok((player, secret)) => {
-                                                   trace!("Sending {} to {}", player.name, default_server.id);
-
+                                                    
                                                    let target = default_server.get_address();
                                                    if let Ok(mut server) = TcpStream::connect(target).await {
-                                                        server.set_nodelay(true);
-                                                        server.write_packet(handshake.clone()).await.unwrap();
+                                                       trace!("Established proxy connection to {} ({}) for {}.", default_server.id, target, player.name);
+                                                       server.set_nodelay(true);
+                                                       server.write_packet(handshake.clone()).await.unwrap();
+                                                       server.write_packet(crate::packet::login::Start {
+                                                           name: player.name.to_owned()
+                                                       }).await.unwrap();
+
+                                                       let success_packet: io::Result<crate::packet::login::Success> = server.receive().await;
+                                                       if success_packet.is_ok() {
+                                                           let success_packet = crate::packet::login::Success {
+                                                               uuid: player.id.to_string(),
+                                                               name: player.name.to_owned()
+                                                           };
+
+                                                           info!("Got login success packet!");
+                                                       } else {
+                                                           let error = format!("{}", success_packet.err().unwrap());
+                                                           if let Ok(packet_id) = error.parse::<i32>() {
+                                                                if packet_id == 0 { // disconnect packet
+                                                                    let message = server.read_string().await.unwrap();
+                                                                    let message: Chat = serde_json::from_str(&message).unwrap();
+
+                                                                    if let Some(translate) = &message.translate {
+                                                                        if translate.contains("Connection throttled") {
+                                                                            error!("Connection throttle is enabled for {}. Turn it off!", default_server.id);
+                                                                        }   
+                                                                    }
+
+                                                                    stream.write_packet_encrypted(crate::packet::login::Disconnect {
+                                                                            chat: message // directly proxy the disconnect message from destination server
+                                                                    }, &secret).await.unwrap();
+                                                                    return
+                                                                }
+                                                            }
+
+                                                            error!("Failed to connect {} to {}!", player.name, default_server.id);
+                                                       }
+
                                                    } else {
                                                        trace!("Failed to connect {} to {}!", player.name, default_server.id);
                                                        stream.write_packet_encrypted(crate::packet::login::Disconnect {
