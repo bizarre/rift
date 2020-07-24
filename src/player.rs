@@ -7,7 +7,9 @@ use std::collections::HashMap;
 pub struct Player {
     pub id: Uuid,
     pub name: String,
-    pub properties: Vec<HashMap<String, String>>
+    pub properties: Vec<HashMap<String, String>>,
+    #[serde(skip_serializing)]
+    pub server: Option<String>
 }
 
 impl Player {
@@ -15,7 +17,8 @@ impl Player {
         Player {
             id: id,
             name: name.into(),
-            properties: Vec::new()
+            properties: Vec::new(),
+            server: None
         }
     }
 }

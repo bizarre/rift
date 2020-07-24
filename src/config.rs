@@ -4,12 +4,22 @@ use std::fs;
 use std::path::Path;
 use log::{info, trace, warn};
 use std::net::ToSocketAddrs;
+use rand::seq::SliceRandom;
+use std::io::{Error, ErrorKind};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServerConfig {
     pub id: &'static str,
-    address: &'static str
+    pub address: &'static str,
+    pub default: bool
 }
+
+impl ServerConfig {
+    fn get_address(&self) -> std::net::SocketAddr {
+        self.address.to_owned().to_socket_addrs().unwrap().next().unwrap()
+    }
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProxyConfig {
@@ -20,12 +30,6 @@ pub struct ProxyConfig {
     pub motd: &'static str,
     pub favicon: Option<&'static str>,
     pub servers: Vec<ServerConfig>
-}
-
-impl ServerConfig {
-    fn get_address(&self) -> std::net::SocketAddr {
-        self.address.to_owned().to_socket_addrs().unwrap().next().unwrap()
-    }
 }
 
 impl ProxyConfig {
@@ -50,6 +54,18 @@ impl ProxyConfig {
     pub(crate) fn set_favicon(&mut self, b64: String) {
         self.favicon = Some(Box::leak(b64.into_boxed_str()));
     }
+
+    pub(crate) fn get_default_server(&self) -> std::io::Result<ServerConfig> {
+        let default_servers: Vec<ServerConfig> = self.servers
+            .iter()
+            .filter(|server| server.default)
+            .map(|server| server.clone())
+            .collect();
+
+        let to_return = default_servers.choose(&mut rand::thread_rng()).cloned();
+
+        to_return.ok_or(Error::new(ErrorKind::Other, "Packet read timed out."))
+    }
 }
 
 impl Default for ProxyConfig {
@@ -57,7 +73,8 @@ impl Default for ProxyConfig {
         let mut servers = Vec::new();
         servers.push(ServerConfig {
             id: "lobby",
-            address: "localhost:25565"
+            address: "localhost:25565",
+            default: true
         });
 
         ProxyConfig {

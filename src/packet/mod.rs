@@ -10,6 +10,8 @@ use openssl::rsa::{Rsa, Padding};
 use aes::Aes128;
 use cfb8::Cfb8;
 use cfb8::stream_cipher::{NewStreamCipher, StreamCipher};
+use serde::Serialize;
+use crate::util::color::Color;
 
 type AesCfb8 = Cfb8<Aes128>;
 
@@ -224,6 +226,19 @@ impl<R: AsyncRead + Unpin + Send + Sync> AsyncPacketReadExt for R {
                 trace!("Packet read timed out.");
                 return Err(Error::new(ErrorKind::Other, "Packet read timed out."));
             }
+        }
+    }
+}
+
+#[derive(Serialize, Debug)]
+pub struct Chat {
+    pub text: String
+}
+
+impl Chat {
+    pub fn new<S: Into<String>>(text: S) -> Self {
+        Chat {
+            text: text.into().colored()
         }
     }
 }

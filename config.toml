@@ -7,3 +7,6 @@ motd = "&3Enter the rift."
 [[servers]]
 id = "lobby"
 address = "localhost:25565"
+# you can have multiple default servers
+# connecting players will be randomly assigned to a default server
+default = true

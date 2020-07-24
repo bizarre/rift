@@ -10,11 +10,12 @@ use log::{info, debug, error, trace};
 use crate::command::{CommandSender, ProxyCommandExecutor};
 use crate::player::Player;
 use crate::engine::{ProxyEngine, IntoProxyEngine};
-use crate::config::{ProxyConfig};
+use crate::config::{ProxyConfig, ServerConfig};
 use std::marker::PhantomData;
 use crate::packet::{In, Out, AsyncPacketReadExt, AsyncPacketWriteExt};
 use openssl::rsa::{Rsa, Padding};
 use rand::Rng;
+use crate::packet::Chat;
 
 pub trait Server {
     fn get_players(&self) -> Vec<Player>;
@@ -192,15 +193,23 @@ where
                             match crate::protocol::slp::attempt_server_list_ping(config.clone(), &cloned, &mut stream, addr).await {
                                 Ok(handshake) => {
                                     if handshake.next_state == 2 {
-                                        match crate::protocol::login::attempt_login(config.clone(), &cloned, &mut stream, addr).await {
-                                            Ok((player, secret)) => {
-                                                println!("player logging in is {:?}", player);
-                                            },
-            
-                                            Err(error) => {
-                                                error!("{}", error);
+                                        if let Ok(default_server) = config.get_default_server() {
+                                            match crate::protocol::login::attempt_login(config.clone(), &cloned, &mut stream, addr).await {
+                                                Ok((player, secret)) => {
+                                                   trace!("Sending {} to {}", player.name, default_server.id);
+                                                },
+                
+                                                Err(error) => {
+                                                    error!("{}", error);
+                                                }
                                             }
-                                        } 
+                                        } else {
+                                            stream.write_packet(crate::packet::login::Disconnect {
+                                                chat: Chat::new("&cWe don't know where to send you!")
+                                            }).await.unwrap();
+
+                                            error!("No default server defined, we don't know where to send player!");
+                                        }
                                     }
                                 },
 

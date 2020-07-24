@@ -5,6 +5,7 @@ use std::io::{Error, ErrorKind};
 use crate::player::Player;
 use serde::Serialize;
 use openssl::rsa::{Rsa, Padding};
+use serde_json;
 
 #[derive(Debug)]
 pub struct Start {
@@ -135,3 +136,26 @@ impl Out for Success {
         Ok(())
     }
 }
+
+#[derive(Debug)]
+pub struct Disconnect {
+    pub chat: crate::packet::Chat
+}
+
+
+impl Packet for Disconnect {
+    fn get_id(&self) -> i32 {
+        0
+    }
+}
+
+
+#[async_trait]
+impl Out for Disconnect {
+    async fn write<W: AsyncPacketWriteExt + std::marker::Unpin + Send + Sync>(self, buffer: &mut W) -> std::io::Result<()> {
+        buffer.write_string(serde_json::to_string(&self.chat)?).await?;
+        Ok(())
+    }
+}
+
+
